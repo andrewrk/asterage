@@ -37,12 +37,12 @@ function listenInput() {
     event.ports[0].onmessage = onPortMsg;
 
     function onPortMsg(ev) {
-      if (ev.type === "button") {
-        buttons[ev.player - 1][ev.button] = ev.pressed;
-      } else if (ev.type === "system") {
-        if (ev.button === "ONE_PLAYER") {
+      if (ev.data.type === "button") {
+        buttons[ev.data.player - 1][ev.data.button] = ev.data.pressed;
+      } else if (ev.data.type === "system") {
+        if (ev.data.button === "ONE_PLAYER") {
           buttons[0].START = true;
-        } else if (ev.button === "TWO_PLAYER") {
+        } else if (ev.data.button === "TWO_PLAYER") {
           buttons[1].START = true;
         }
       }
