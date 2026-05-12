@@ -4,6 +4,7 @@ const text_decoder = new TextDecoder();
 const text_encoder = new TextEncoder();
 
 let images = [];
+let sounds = [];
 let buttons = [
   { A: false, B: false, UP: false, DOWN: false, LEFT: false, RIGHT: false, START: false },
   { A: false, B: false, UP: false, DOWN: false, LEFT: false, RIGHT: false, START: false },
@@ -42,13 +43,21 @@ WebAssembly.instantiateStreaming(fetch("main.wasm"), {
       context.fillText(msg, x, y);
     },
     drawImage: function(img, x, y) {
-    	context.drawImage(images[img], x, y);
+      context.drawImage(images[img], x, y);
     },
     loadImage: function(ptr, len) {
-    	const path = decodeString(ptr, len);
-    	const img = new Image();
-    	img.src = path;
-		images.push(img);
+      const path = decodeString(ptr, len);
+      const img = new Image();
+      img.src = path;
+      images.push(img);
+    },
+    loadSound: function(ptr, len) {
+      const path = decodeString(ptr, len);
+      const sound = new Audio(path);
+      sounds.push(sound);
+    },
+    playSound: function(sound) {
+      sounds[sound].play();
     },
   },
 }).then(function(obj) {
