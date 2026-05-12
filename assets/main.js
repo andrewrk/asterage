@@ -42,6 +42,8 @@ WebAssembly.instantiateStreaming(fetch("main.wasm"), {
       context.fillStyle = "white";
       context.fillText(msg, x, y);
     },
+    fillRect: function(rect) {
+    },
     drawImage: function(img, rect, radians) {
       const r = unwrapRect(rect);
       context.save();

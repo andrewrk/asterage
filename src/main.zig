@@ -11,6 +11,7 @@ const js = struct {
     extern "js" fn panic(ptr: [*]const u8, len: usize) noreturn;
     extern "js" fn buttons(ptr: [*]u8, len: usize) void;
     extern "js" fn fillText(ptr: [*]const u8, len: usize, size: u16, x: u16, y: u16) void;
+    extern "js" fn fillRect(Rect) void;
     extern "js" fn drawImage(img: Sprite.Index, rect: Rect, radians: f32) void;
     extern "js" fn loadSound(ptr: [*]const u8, len: usize) void;
     extern "js" fn playSound(sound: usize) void;
@@ -80,8 +81,8 @@ const Rect = packed struct(u64) {
 };
 
 const Size = packed struct(u64) {
-    w: u16,
-    h: u16,
+    w: i16,
+    h: i16,
     padding: u32 = 0,
 };
 
@@ -110,9 +111,11 @@ const Game = struct {
         },
     },
     ships: std.ArrayList(Ship) = .empty,
+    rng: std.Random.DefaultPrng = .init(0),
+    stars: [150]Star,
 };
 
-var game: Game = .{};
+var game: Game = .{ .stars = undefined };
 
 const Player = struct {
     ship: Ship.Index,
@@ -277,9 +280,33 @@ fn setupFallible() !void {
             .y = 20,
         };
     }
+
+    generateStars(&game.stars);
 }
 fn loadSound(sound: []const u8) void {
     js.loadSound(sound.ptr, sound.len);
+}
+
+const Star = struct {
+    rect: Rect,
+};
+
+const display_size: Size = .{ .w = 336, .h = 262 };
+
+fn generateStars(stars: []Star) void {
+    const rng = game.rng.random();
+    for (stars) |*star| {
+        const w: u16 = switch (rng.enumValue(enum { big, small })) {
+            .big => 2,
+            .small => 1,
+        };
+        star.* = .{ .rect = .{
+            .x = rng.uintLessThanBiased(u16, display_size.w),
+            .y = rng.uintLessThanBiased(u16, display_size.h),
+            .w = w,
+            .h = w,
+        } };
+    }
 }
 
 /// The main game loop.
@@ -364,6 +391,10 @@ export fn update() void {
 }
 
 fn display(dt: f32) void {
+    for (game.stars) |star| {
+        js.fillRect(star.rect);
+    }
+
     for (game.ships.items) |*ship| {
         const sprite = game.assets.animate(&ship.anim_playback, dt);
         std.log.debug("pos = {any} size = {any}", .{ ship.pos, sprite.size });
