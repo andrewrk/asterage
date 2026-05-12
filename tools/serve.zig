@@ -8,6 +8,8 @@ const assert = std.debug.assert;
 const Cache = std.Build.Cache;
 const fatal = std.process.fatal;
 
+const mime = @import("mime");
+
 pub fn main(init: std.process.Init) !void {
     const arena = init.arena.allocator();
     const gpa = init.gpa;
@@ -144,21 +146,36 @@ fn serveRequest(request: *std.http.Server.Request, context: *Context) !void {
         mem.eql(u8, request.head.target, "/debug/"))
     {
         try serveStatic(request, context, "assets/index.html", "text/html");
-    } else if (mem.eql(u8, request.head.target, "/main.js") or
-        mem.eql(u8, request.head.target, "/debug/main.js"))
-    {
-        try serveStatic(request, context, "assets/main.js", "application/javascript");
     } else if (mem.eql(u8, request.head.target, "/main.wasm")) {
         try serveWasm(request, context, .ReleaseSmall);
     } else if (mem.eql(u8, request.head.target, "/debug/main.wasm")) {
         try serveWasm(request, context, .Debug);
     } else {
-        try request.respond("not found", .{
-            .status = .not_found,
-            .extra_headers = &.{
-                .{ .name = "content-type", .value = "text/plain" },
+        const sub_path = if (mem.startsWith(u8, request.head.target, "/debug/"))
+            request.head.target["/debug/".len..]
+        else
+            request.head.target["/".len..];
+
+        const ext = Io.Dir.path.extension(sub_path);
+        const mime_type = mime.extension_map.get(ext) orelse .@"application/octet-stream";
+
+        const gpa = context.gpa;
+        const file_path = try Io.Dir.path.join(gpa, &.{ "assets", sub_path });
+        defer gpa.free(file_path);
+
+        std.log.debug("serveStatic {s} {t}", .{ file_path, mime_type });
+
+        serveStatic(request, context, file_path, @tagName(mime_type)) catch |err| switch (err) {
+            error.FileNotFound => {
+                try request.respond("not found", .{
+                    .status = .not_found,
+                    .extra_headers = &.{
+                        .{ .name = "content-type", .value = "text/plain" },
+                    },
+                });
             },
-        });
+            else => |e| return e,
+        };
     }
 }
 
