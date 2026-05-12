@@ -6,7 +6,7 @@ const gpa = std.heap.wasm_allocator;
 const js = struct {
     extern "js" fn log(ptr: [*]const u8, len: usize) void;
     extern "js" fn panic(ptr: [*]const u8, len: usize) noreturn;
-    extern "js" fn buttons(ptr: [*]const u8, len: usize) void;
+    extern "js" fn buttons(ptr: [*]u8, len: usize) void;
     extern "js" fn fillText(ptr: [*]const u8, len: usize, size: u16, x: u16, y: u16) void;
 };
 
