@@ -485,6 +485,25 @@ export fn update() void {
         }
     }
 
+    {
+        const decorations = &game.decorations;
+        var i: usize = 0;
+        while (i < decorations.items.len) {
+            const decoration = &decorations.items[i];
+            decoration.duration -= dt;
+            if (decoration.anim_playback.index == .none or decoration.duration <= 0) {
+                _ = decorations.swapRemove(i);
+                continue;
+            }
+            decoration.pos.add(decoration.vel.scaled(dt));
+            decoration.rotation = @mod(
+                decoration.rotation + decoration.rotation_vel * dt,
+                2 * math.pi,
+            );
+            i += 1;
+        }
+    }
+
     display(dt);
 }
 
