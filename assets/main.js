@@ -45,8 +45,9 @@ WebAssembly.instantiateStreaming(fetch("main.wasm"), {
     drawImage: function(img, rect, radians) {
       const r = unwrapRect(rect);
       context.save();
-      context.translate(r.w / 2, r.h / 2);
+      context.translate(r.w / 2 + r.x, r.h / 2 + r.y);
       context.rotate(radians);
+      context.translate(-r.x - r.w / 2, -r.y - r.h / 2);
       context.drawImage(images[img], r.x, r.y, r.w, r.h);
       context.restore();
     },
