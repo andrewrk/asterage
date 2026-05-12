@@ -23,12 +23,22 @@ pub fn build(b: *std.Build) void {
             // .tail_call, not supported by Safari
         }),
     });
+
     const serve_exe = b.addExecutable(.{
         .name = "serve",
         .root_module = b.createModule(.{
             .root_source_file = b.path("tools/serve.zig"),
             .optimize = .Debug,
             .target = b.graph.host,
+            .imports = &.{
+                .{
+                    .name = "mime",
+                    .module = b.dependency("mime", .{
+                        .target = b.graph.host,
+                        .optimize = .Debug,
+                    }).module("mime"),
+                },
+            },
         }),
     });
 
@@ -55,6 +65,9 @@ pub fn build(b: *std.Build) void {
     serve_step.dependOn(&run_serve.step);
 
     b.getInstallStep().dependOn(&b.addInstallFile(wasm.getEmittedBin(), "main.wasm").step);
-    b.installFile("assets/main.js", "main.js");
-    b.installFile("assets/index.html", "index.html");
+    b.installDirectory(.{
+        .source_dir = b.path("assets"),
+        .install_dir = .prefix,
+        .install_subdir = "",
+    });
 }
