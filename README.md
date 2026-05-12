@@ -2,6 +2,10 @@
 
 Multiplayer space dogfighting
 
+## Current Status
+
+Blinken lights.
+
 ## About RCade
 
 This game is built for [RCade](https://rcade.recurse.com), a custom arcade

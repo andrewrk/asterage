@@ -1,0 +1,18 @@
+{
+  "$schema": "https://rcade.dev/manifest.schema.json",
+  "name": "asterage",
+  "display_name": "Asterage 2P",
+  "description": "Multiplayer space dogfighting",
+  "visibility": "public",
+  "authors": [
+    {
+      "display_name": "Andrew Kelley"
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "@rcade/input-classic",
+      "version": "1.0.0"
+    }
+  ]
+}
