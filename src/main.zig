@@ -380,7 +380,7 @@ export fn update() void {
         ship.prev_input = ship.input;
     }
 
-    const dt = 1.0 / 60.0;
+    const dt = 1.0 / 120.0;
     const rng = game.rng.random();
 
     {
@@ -470,7 +470,6 @@ export fn update() void {
             turret.cooldown -= dt;
             if (ship.input.fire and turret.cooldown <= 0) {
                 turret.cooldown = turret.cooldown_amount;
-                log.debug("shot bullet", .{});
                 game.bullets.append(gpa, .{
                     .sprite = game.bullet_small,
                     .pos = ship.pos.plus(V.unit(ship.rotation + turret.angle).scaled(turret.radius)),
