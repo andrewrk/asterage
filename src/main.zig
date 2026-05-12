@@ -532,7 +532,10 @@ fn display(dt: f32) void {
         const sprite = game.assets.sprite(bullet.sprite);
         js.drawImage(
             sprite.index,
-            .fromVec(bullet.pos, sprite.size),
+            bullet.pos.x,
+            bullet.pos.y,
+            sprite.size.x,
+            sprite.size.y,
             // The bullet asset images point up instead of to the right.
             bullet.vel.angle() + math.pi / 2.0,
         );
@@ -542,7 +545,10 @@ fn display(dt: f32) void {
         const sprite = game.assets.animate(&decoration.anim_playback, dt);
         js.drawImage(
             sprite.index,
-            .fromVec(decoration.pos, sprite.size),
+            decoration.pos.x,
+            decoration.pos.y,
+            sprite.size.x,
+            sprite.size.y,
             decoration.rotation,
         );
     }
