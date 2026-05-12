@@ -3,6 +3,7 @@ const context = canvas.getContext("2d");
 const text_decoder = new TextDecoder();
 const text_encoder = new TextEncoder();
 
+let images = [];
 let buttons = [
   { A: false, B: false, UP: false, DOWN: false, LEFT: false, RIGHT: false, START: false },
   { A: false, B: false, UP: false, DOWN: false, LEFT: false, RIGHT: false, START: false },
@@ -40,6 +41,15 @@ WebAssembly.instantiateStreaming(fetch("main.wasm"), {
       context.fillStyle = "white";
       context.fillText(msg, x, y);
     },
+    drawImage: function(img, x, y) {
+    	context.drawImage(images[img], x, y);
+    },
+    loadImage: function(ptr, len) {
+    	const path = decodeString(ptr, len);
+    	const img = new Image();
+    	img.src = path;
+		images.push(img);
+    },
   },
 }).then(function(obj) {
   wasm_exports = obj.instance.exports;
@@ -49,6 +59,7 @@ WebAssembly.instantiateStreaming(fetch("main.wasm"), {
   // fire on the real arcade cabinet.
   addBrowserListeners();
   addCabinetListeners();
+  wasm_exports.setup();
   update();
 });
 

@@ -8,6 +8,8 @@ const js = struct {
     extern "js" fn panic(ptr: [*]const u8, len: usize) noreturn;
     extern "js" fn buttons(ptr: [*]u8, len: usize) void;
     extern "js" fn fillText(ptr: [*]const u8, len: usize, size: u16, x: u16, y: u16) void;
+    extern "js" fn drawImage(img: usize, x: u16, y: u16) void;
+    extern "js" fn loadImage(ptr: [*]const u8, len: usize) void;
 };
 
 pub const std_options: std.Options = .{
@@ -70,6 +72,14 @@ fn fillText(text: []const u8, size: u16, x: u16, y: u16) void {
     js.fillText(text.ptr, text.len, size, x, y);
 }
 
+export fn setup() void {
+    loadImage("img/ship/ranger0.png");
+}
+
+fn loadImage(img: []const u8) void {
+    js.loadImage(img.ptr, img.len);
+}
+
 /// The main game loop.
 export fn update() void {
     var button_buffer: [16]u8 = undefined;
@@ -85,4 +95,6 @@ export fn update() void {
     if (buttons[1].b) {
         fillText("player 2 B pressed", 30, 1, 100);
     }
+
+    js.drawImage(0, 100, 0);
 }
