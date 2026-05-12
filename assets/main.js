@@ -1,18 +1,95 @@
 const canvas = document.getElementById("app");
 const context = canvas.getContext("2d");
+const text_decoder = new TextDecoder();
+const text_encoder = new TextEncoder();
 
 let buttons = [
   { A: false, B: false, UP: false, DOWN: false, LEFT: false, RIGHT: false, START: false },
   { A: false, B: false, UP: false, DOWN: false, LEFT: false, RIGHT: false, START: false },
 ];
-
-let frameIndex = 0;
+let wasm_exports = null;
 
 canvas.focus();
 context.imageSmoothingEnabled = false;
 
-listenInput();
-update();
+WebAssembly.instantiateStreaming(fetch("main.wasm"), {
+  js: {
+    log: function(ptr, len) {
+      const msg = decodeString(ptr, len);
+      console.log(msg);
+    },
+    panic: function (ptr, len) {
+      const msg = decodeString(ptr, len);
+      throw new Error("panic: " + msg);
+    },
+    buttons: function (ptr, len) {
+      const bytes = new Uint8Array(wasm_exports.memory.buffer, ptr, len);
+      for (let i = 0; i < 2; i += 1) {
+        bytes[8*i+0] = buttons[i].A;
+        bytes[8*i+1] = buttons[i].B;
+        bytes[8*i+2] = buttons[i].UP;
+        bytes[8*i+3] = buttons[i].DOWN;
+        bytes[8*i+4] = buttons[i].LEFT;
+        bytes[8*i+5] = buttons[i].RIGHT;
+        bytes[8*i+6] = buttons[i].START;
+      }
+    },
+    fillText: function(ptr, len, size, x, y) {
+      const msg = decodeString(ptr, len);
+      context.font = size + "px serif";
+      context.fillStyle = "white";
+      context.fillText(msg, x, y);
+    },
+  },
+}).then(function(obj) {
+  wasm_exports = obj.instance.exports;
+  window.wasm = obj; // for debugging
+
+  // For testing in browser, hook up the keyboard. The real arcade cabinet
+  // causes these addEventListener calls to throw an error.
+  try {
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+  } catch {
+    listenInput();
+  }
+
+  update();
+});
+
+function onKeyDown(ev) {
+  switch (ev.code) {
+    case "KeyW": buttons[0].UP = true; return;
+    case "KeyA": buttons[0].LEFT = true; return;
+    case "KeyS": buttons[0].DOWN = true; return;
+    case "KeyD": buttons[0].RIGHT = true; return;
+    case "KeyZ": buttons[0].A = true; return;
+    case "KeyX": buttons[0].B = true; return;
+    case "KeyI": buttons[1].UP = true; return;
+    case "KeyJ": buttons[1].LEFT = true; return;
+    case "KeyK": buttons[1].DOWN = true; return;
+    case "KeyL": buttons[1].RIGHT = true; return;
+    case "KeyN": buttons[1].A = true; return;
+    case "KeyM": buttons[1].B = true; return;
+  }
+}
+
+function onKeyUp(ev) {
+  switch (ev.code) {
+    case "KeyW": buttons[0].UP = false; return;
+    case "KeyA": buttons[0].LEFT = false; return;
+    case "KeyS": buttons[0].DOWN = false; return;
+    case "KeyD": buttons[0].RIGHT = false; return;
+    case "KeyZ": buttons[0].A = false; return;
+    case "KeyX": buttons[0].B = false; return;
+    case "KeyI": buttons[1].UP = false; return;
+    case "KeyJ": buttons[1].LEFT = false; return;
+    case "KeyK": buttons[1].DOWN = false; return;
+    case "KeyL": buttons[1].RIGHT = false; return;
+    case "KeyN": buttons[1].A = false; return;
+    case "KeyM": buttons[1].B = false; return;
+  }
+}
 
 function listenInput() {
   const name = "@rcade/input-classic";
@@ -52,22 +129,12 @@ function listenInput() {
 
 function update() {
   context.clearRect(0, 0, canvas.width, canvas.height);
-
-  context.font = "30px serif";
-  context.fillStyle = "white";
-
-  context.fillText("frame " + frameIndex, 1, 50);
-  context.fillText("player 1: " + activeButtons(buttons[0]), 1, 100);
-  context.fillText("player 2: " + activeButtons(buttons[1]), 1, 150);
-
-  frameIndex += 1;
+  wasm_exports.update();
   requestAnimationFrame(update);
 }
 
-function activeButtons(o) {
-  var s = "";
-  for (key in o) {
-    if (o[key]) s += key + ",";
-  }
-  return s;
+function decodeString(ptr, len) {
+  if (len === 0) return "";
+  return text_decoder.decode(new Uint8Array(wasm_exports.memory.buffer, ptr, len));
 }
+
