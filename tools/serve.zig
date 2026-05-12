@@ -149,7 +149,7 @@ fn serveRequest(request: *std.http.Server.Request, context: *Context) !void {
     {
         try serveStatic(request, context, "assets/main.js", "application/javascript");
     } else if (mem.eql(u8, request.head.target, "/main.wasm")) {
-        try serveWasm(request, context, .ReleaseFast);
+        try serveWasm(request, context, .ReleaseSmall);
     } else if (mem.eql(u8, request.head.target, "/debug/main.wasm")) {
         try serveWasm(request, context, .Debug);
     } else {
