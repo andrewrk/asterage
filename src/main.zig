@@ -14,7 +14,7 @@ const js = struct {
     extern "js" fn buttons(ptr: [*]u8, len: usize) void;
     extern "js" fn fillText(ptr: [*]const u8, len: usize, size: u16, x: u16, y: u16) void;
     extern "js" fn fillRect(Rect) void;
-    extern "js" fn drawImage(img: Sprite.Index, rect: Rect, radians: f32) void;
+    extern "js" fn drawImage(img: Sprite.Index, x: f32, y: f32, w: f32, h: f32, radians: f32) void;
     extern "js" fn loadSound(ptr: [*]const u8, len: usize) void;
     extern "js" fn playSound(sound: usize) void;
     extern "js" fn loadImage(ptr: [*]const u8, len: usize) void;
@@ -67,10 +67,10 @@ fn Slice(T: type) type {
 }
 
 const Rect = packed struct(u64) {
-    x: u16,
-    y: u16,
-    w: u16,
-    h: u16,
+    x: i16,
+    y: i16,
+    w: i16,
+    h: i16,
 
     fn fromVec(pos: V, size: V) Rect {
         return .{
@@ -342,13 +342,13 @@ const display_size: Size = .{ .w = 336, .h = 262 };
 fn generateStars(stars: []Star) void {
     const rng = game.rng.random();
     for (stars) |*star| {
-        const w: u16 = switch (rng.enumValue(enum { big, small })) {
+        const w: i16 = switch (rng.enumValue(enum { big, small })) {
             .big => 2,
             .small => 1,
         };
         star.* = .{ .rect = .{
-            .x = rng.uintLessThanBiased(u16, display_size.w),
-            .y = rng.uintLessThanBiased(u16, display_size.h),
+            .x = rng.intRangeAtMostBiased(i16, 0, display_size.w),
+            .y = rng.intRangeAtMostBiased(i16, 0, display_size.h),
             .w = w,
             .h = w,
         } };
@@ -430,6 +430,12 @@ export fn update() void {
     for (game.ships.items) |*ship| {
         ship.pos.add(ship.vel.scaled(dt));
 
+        // wrap positions
+        if (ship.pos.x - 32.0 > display_size.w) ship.pos.x -= display_size.w;
+        if (ship.pos.x < -32.0) ship.pos.x += display_size.w;
+        if (ship.pos.y + 32.0 > display_size.h) ship.pos.y -= display_size.h;
+        if (ship.pos.y < -32.0) ship.pos.y += display_size.h;
+
         // explode ships that reach 0 hp
         //if (ship.hp <= 0) {
         //    // spawn explosion here
@@ -491,7 +497,10 @@ fn display(dt: f32) void {
         const sprite = game.assets.animate(&ship.anim_playback, dt);
         js.drawImage(
             sprite.index,
-            .fromVec(ship.pos, sprite.size),
+            ship.pos.x,
+            ship.pos.y,
+            sprite.size.x,
+            sprite.size.y,
             // The ship asset images point up instead of to the right.
             ship.rotation + math.pi / 2.0,
         );

@@ -47,13 +47,12 @@ WebAssembly.instantiateStreaming(fetch("main.wasm"), {
       context.fillStyle = "white";
       context.fillRect(r.x, r.y, r.w, r.h);
     },
-    drawImage: function(img, rect, radians) {
-      const r = unwrapRect(rect);
+    drawImage: function(img, x, y, w, h, radians) {
       context.save();
-      context.translate(r.w / 2 + r.x, r.h / 2 + r.y);
+      context.translate(w / 2 + x, h / 2 + y);
       context.rotate(radians);
-      context.translate(-r.x - r.w / 2, -r.y - r.h / 2);
-      context.drawImage(images[img], r.x, r.y, r.w, r.h);
+      context.translate(-x - w / 2, -y - h / 2);
+      context.drawImage(images[img], x, y, w, h);
       context.restore();
     },
     loadImage: function(ptr, len) {
