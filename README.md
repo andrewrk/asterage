@@ -4,7 +4,7 @@ Multiplayer space dogfighting
 
 ## Current Status
 
-Blinken lights.
+Counts frames.
 
 ## About RCade
 
