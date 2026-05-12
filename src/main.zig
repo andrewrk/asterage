@@ -6,6 +6,8 @@ const math = std.math;
 
 const V = @import("Vec2d.zig");
 
+var game: Game = .{};
+
 const js = struct {
     extern "js" fn log(ptr: [*]const u8, len: usize) void;
     extern "js" fn panic(ptr: [*]const u8, len: usize) noreturn;
@@ -112,10 +114,41 @@ const Game = struct {
     },
     ships: std.ArrayList(Ship) = .empty,
     rng: std.Random.DefaultPrng = .init(0),
-    stars: [150]Star,
+    bullets: std.ArrayList(Bullet) = .empty,
+    decorations: std.ArrayList(Decoration) = .empty,
+
+    bullet_small: Sprite.Index = undefined,
+    stars: [150]Star = undefined,
+    shrapnel_animations: [3]Animation.Index = undefined,
 };
 
-var game: Game = .{ .stars = undefined };
+const Bullet = struct {
+    sprite: Sprite.Index,
+    /// pixels
+    pos: V,
+    /// pixels per second
+    vel: V,
+    /// seconds
+    duration: f32,
+    /// pixels
+    radius: f32,
+    /// Amount of HP the bullet removes on hit.
+    damage: f32,
+};
+
+const Decoration = struct {
+    anim_playback: Animation.Playback,
+    /// pixels
+    pos: V,
+    /// pixels per second
+    vel: V,
+    /// radians
+    rotation: f32,
+    /// radians per second
+    rotation_vel: f32,
+    /// seconds
+    duration: f32,
+};
 
 const Player = struct {
     ship: Ship.Index,
@@ -223,6 +256,19 @@ export fn setup() void {
 fn setupFallible() !void {
     loadSound("sfx/weak_shot1.ogg");
     const assets = &game.assets;
+
+    const shrapnel_sprites = [_]Sprite.Index{
+        try assets.loadSprite("img/shrapnel/01.png", .{ .x = 7, .y = 7 }),
+        try assets.loadSprite("img/shrapnel/02.png", .{ .x = 4, .y = 3 }),
+        try assets.loadSprite("img/shrapnel/03.png", .{ .x = 4, .y = 3 }),
+    };
+    game.shrapnel_animations = .{
+        try assets.addAnimation(&.{shrapnel_sprites[0]}, null, 30),
+        try assets.addAnimation(&.{shrapnel_sprites[1]}, null, 30),
+        try assets.addAnimation(&.{shrapnel_sprites[2]}, null, 30),
+    };
+
+    game.bullet_small = try assets.loadSprite("img/bullet/small.png", .{ .x = 8, .y = 24 });
 
     const ship_sprites = [_]Sprite.Index{
         try assets.loadSprite("img/ship/ranger0.png", .{ .x = 32, .y = 32 }),
@@ -335,6 +381,51 @@ export fn update() void {
     }
 
     const dt = 1.0 / 60.0;
+    const rng = game.rng.random();
+
+    {
+        const bullets = &game.bullets;
+        var i: usize = 0;
+        while (i < bullets.items.len) {
+            const bullet = &bullets.items[i];
+
+            bullet.pos.add(bullet.vel.scaled(dt));
+
+            bullet.duration -= dt;
+            if (bullet.duration <= 0) {
+                _ = bullets.swapRemove(i);
+                continue;
+            }
+
+            for (game.ships.items) |*ship| {
+                if (ship.pos.distanceSqrd(bullet.pos) <
+                    ship.radius * ship.radius + bullet.radius * bullet.radius)
+                {
+                    ship.hp -= bullet.damage;
+                    _ = bullets.swapRemove(i);
+
+                    // spawn shrapnel here
+                    const shrapnel_animation = game.shrapnel_animations[
+                        rng.uintLessThanBiased(usize, game.shrapnel_animations.len)
+                    ];
+                    const random_vector = V.unit(rng.float(f32) * math.pi * 2)
+                        .scaled(bullet.vel.length() * 0.2);
+                    game.decorations.append(gpa, .{
+                        .anim_playback = .{ .index = shrapnel_animation, .time_passed = 0 },
+                        .pos = ship.pos,
+                        .vel = ship.vel.plus(bullet.vel.scaled(0.2)).plus(random_vector),
+                        .rotation = 2 * math.pi * rng.float(f32),
+                        .rotation_vel = 2 * math.pi * rng.float(f32),
+                        .duration = 2,
+                    }) catch {};
+
+                    continue;
+                }
+            }
+
+            i += 1;
+        }
+    }
 
     for (game.ships.items) |*ship| {
         ship.pos.add(ship.vel.scaled(dt));
@@ -352,7 +443,7 @@ export fn update() void {
         //    });
         //    // delete ship and spawn it somewhere else
         //    ship.* = ranger_template;
-        //    const new_angle = math.pi * 2 * std.crypto.random.float(f32);
+        //    const new_angle = math.pi * 2 * rng.float(f32);
         //    ship.pos = display_center.plus(V.unit(new_angle).scaled(500));
         //    continue;
         //}
@@ -375,14 +466,15 @@ export fn update() void {
             turret.cooldown -= dt;
             if (ship.input.fire and turret.cooldown <= 0) {
                 turret.cooldown = turret.cooldown_amount;
-                //try bullets.append(.{
-                //    .sprite = bullet_small,
-                //    .pos = ship.pos.plus(V.unit(ship.rotation + turret.angle).scaled(turret.radius)),
-                //    .vel = V.unit(ship.rotation).scaled(turret.bullet_speed).plus(ship.vel),
-                //    .duration = turret.bullet_duration,
-                //    .radius = 2,
-                //    .damage = turret.bullet_damage,
-                //});
+                log.debug("shot bullet", .{});
+                game.bullets.append(gpa, .{
+                    .sprite = game.bullet_small,
+                    .pos = ship.pos.plus(V.unit(ship.rotation + turret.angle).scaled(turret.radius)),
+                    .vel = V.unit(ship.rotation).scaled(turret.bullet_speed).plus(ship.vel),
+                    .duration = turret.bullet_duration,
+                    .radius = 2,
+                    .damage = turret.bullet_damage,
+                }) catch {};
             }
         }
     }
@@ -397,7 +489,6 @@ fn display(dt: f32) void {
 
     for (game.ships.items) |*ship| {
         const sprite = game.assets.animate(&ship.anim_playback, dt);
-        std.log.debug("pos = {any} size = {any}", .{ ship.pos, sprite.size });
         js.drawImage(
             sprite.index,
             .fromVec(ship.pos, sprite.size),
@@ -426,6 +517,25 @@ fn display(dt: f32) void {
         //        .{ .x = health_bar_size.x * hp_percent, .y = health_bar_size.y },
         //    )));
         //}
+    }
+
+    for (game.bullets.items) |bullet| {
+        const sprite = game.assets.sprite(bullet.sprite);
+        js.drawImage(
+            sprite.index,
+            .fromVec(bullet.pos, sprite.size),
+            // The bullet asset images point up instead of to the right.
+            bullet.vel.angle() + math.pi / 2.0,
+        );
+    }
+
+    for (game.decorations.items) |*decoration| {
+        const sprite = game.assets.animate(&decoration.anim_playback, dt);
+        js.drawImage(
+            sprite.index,
+            .fromVec(decoration.pos, sprite.size),
+            decoration.rotation,
+        );
     }
 }
 
