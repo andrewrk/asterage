@@ -14,7 +14,7 @@ const js = struct {
     extern "js" fn buttons(ptr: [*]u8, len: usize) void;
     extern "js" fn fillText(ptr: [*]const u8, len: usize, size: u16, x: u16, y: u16) void;
     extern "js" fn fillRect(Rect) void;
-    extern "js" fn drawImage(img: Sprite.Index, x: f32, y: f32, w: f32, h: f32, radians: f32) void;
+    extern "js" fn drawImage(img: Sprite.Index, x: f32, y: f32, w: f32, h: f32, radians: f32, scale: f32) void;
     extern "js" fn loadSound(ptr: [*]const u8, len: usize) void;
     extern "js" fn playSound(sound: usize) void;
     extern "js" fn loadImage(ptr: [*]const u8, len: usize) void;
@@ -431,10 +431,8 @@ export fn update() void {
         ship.pos.add(ship.vel.scaled(dt));
 
         // wrap positions
-        if (ship.pos.x - 32.0 > display_size.w) ship.pos.x -= display_size.w;
-        if (ship.pos.x < -32.0) ship.pos.x += display_size.w;
-        if (ship.pos.y + 32.0 > display_size.h) ship.pos.y -= display_size.h;
-        if (ship.pos.y < -32.0) ship.pos.y += display_size.h;
+        ship.pos.x = @mod(ship.pos.x, display_size.w);
+        ship.pos.y = @mod(ship.pos.y, display_size.h);
 
         // explode ships that reach 0 hp
         //if (ship.hp <= 0) {
@@ -522,6 +520,7 @@ fn display(dt: f32) void {
             sprite.size.y,
             // The ship asset images point up instead of to the right.
             ship.rotation + math.pi / 2.0,
+            0.5,
         );
 
         // HP bar
@@ -557,6 +556,7 @@ fn display(dt: f32) void {
             sprite.size.y,
             // The bullet asset images point up instead of to the right.
             bullet.vel.angle() + math.pi / 2.0,
+            1,
         );
     }
 
@@ -569,6 +569,7 @@ fn display(dt: f32) void {
             sprite.size.x,
             sprite.size.y,
             decoration.rotation,
+            1,
         );
     }
 }

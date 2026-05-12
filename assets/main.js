@@ -47,11 +47,12 @@ WebAssembly.instantiateStreaming(fetch("main.wasm"), {
       context.fillStyle = "white";
       context.fillRect(r.x, r.y, r.w, r.h);
     },
-    drawImage: function(img, x, y, w, h, radians) {
+    drawImage: function(img, x, y, w, h, radians, scale) {
       context.save();
-      context.translate(w / 2 + x, h / 2 + y);
+      context.translate(x, y);
+      context.scale(scale, scale);
       context.rotate(radians);
-      context.translate(-x - w / 2, -y - h / 2);
+      context.translate(-w/2 - x, -h/2 - y);
       context.drawImage(images[img], x, y, w, h);
       context.restore();
     },
