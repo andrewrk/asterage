@@ -11,10 +11,10 @@ const js = struct {
     extern "js" fn panic(ptr: [*]const u8, len: usize) noreturn;
     extern "js" fn buttons(ptr: [*]u8, len: usize) void;
     extern "js" fn fillText(ptr: [*]const u8, len: usize, size: u16, x: u16, y: u16) void;
-    extern "js" fn drawImage(img: usize, x: u16, y: u16) void;
+    extern "js" fn drawImage(img: Sprite.Index, rect: Rect, radians: f32) void;
     extern "js" fn loadSound(ptr: [*]const u8, len: usize) void;
     extern "js" fn playSound(sound: usize) void;
-    extern "js" fn loadImage(ptr: [*]const u8, len: usize) Size;
+    extern "js" fn loadImage(ptr: [*]const u8, len: usize) void;
 };
 
 pub const std_options: std.Options = .{
@@ -63,9 +63,26 @@ fn Slice(T: type) type {
     };
 }
 
-const Size = packed struct(u32) {
+const Rect = packed struct(u64) {
     x: u16,
     y: u16,
+    w: u16,
+    h: u16,
+
+    fn fromVec(pos: V, size: V) Rect {
+        return .{
+            .x = @trunc(pos.x),
+            .y = @trunc(pos.y),
+            .w = @trunc(size.x),
+            .h = @trunc(size.y),
+        };
+    }
+};
+
+const Size = packed struct(u64) {
+    w: u16,
+    h: u16,
+    padding: u32 = 0,
 };
 
 const Buttons = extern struct {
@@ -131,6 +148,10 @@ const Ship = struct {
 
     const Index = enum(u32) {
         _,
+
+        fn ptr(i: Index) *Ship {
+            return &game.ships.items[@intFromEnum(i)];
+        }
     };
 
     const Input = packed struct {
@@ -201,10 +222,10 @@ fn setupFallible() !void {
     const assets = &game.assets;
 
     const ship_sprites = [_]Sprite.Index{
-        try assets.loadSprite("img/ship/ranger0.png"),
-        try assets.loadSprite("img/ship/ranger1.png"),
-        try assets.loadSprite("img/ship/ranger2.png"),
-        try assets.loadSprite("img/ship/ranger3.png"),
+        try assets.loadSprite("img/ship/ranger0.png", .{ .x = 32, .y = 32 }),
+        try assets.loadSprite("img/ship/ranger1.png", .{ .x = 32, .y = 32 }),
+        try assets.loadSprite("img/ship/ranger2.png", .{ .x = 32, .y = 32 }),
+        try assets.loadSprite("img/ship/ranger3.png", .{ .x = 32, .y = 32 }),
     };
     const ship_still = try assets.addAnimation(&.{
         ship_sprites[0],
@@ -252,8 +273,8 @@ fn setupFallible() !void {
     for (&game.players, 0..) |_, i| {
         try ships.append(gpa, ranger_template);
         ships.items[ships.items.len - 1].pos = .{
-            .x = 500 + 500 * @as(f32, @floatFromInt(i)),
-            .y = 500,
+            .x = 20 + 100 * @as(f32, @floatFromInt(i)),
+            .y = 20,
         };
     }
 }
@@ -270,19 +291,115 @@ export fn update() void {
         @ptrCast(&button_buffer[8]),
     };
 
-    if (buttons[0].a) {
-        fillText("player 1 A pressed", 30, 1, 100);
-        js.playSound(0);
-    }
-    if (buttons[1].b) {
-        fillText("player 2 B pressed", 30, 1, 100);
-        js.playSound(0);
+    for (&game.players, buttons) |*player, button| {
+        const ship = player.ship.ptr();
+        ship.input = .{
+            .left = button.left,
+            .right = button.right,
+            .forward = button.b,
+            .fire = button.a,
+        };
+        if (!ship.prev_input.forward and ship.input.forward) {
+            ship.setAnimation(ship.accel);
+        } else if (ship.prev_input.forward and !ship.input.forward) {
+            ship.setAnimation(ship.still);
+        }
+        ship.prev_input = ship.input;
     }
 
-    js.drawImage(0, 100, 0);
+    const dt = 1.0 / 60.0;
+
+    for (game.ships.items) |*ship| {
+        ship.pos.add(ship.vel.scaled(dt));
+
+        // explode ships that reach 0 hp
+        //if (ship.hp <= 0) {
+        //    // spawn explosion here
+        //    try decorations.append(.{
+        //        .anim_playback = .{ .index = explosion_animation, .time_passed = 0 },
+        //        .pos = ship.pos,
+        //        .vel = ship.vel,
+        //        .rotation = 0,
+        //        .rotation_vel = 0,
+        //        .duration = 100,
+        //    });
+        //    // delete ship and spawn it somewhere else
+        //    ship.* = ranger_template;
+        //    const new_angle = math.pi * 2 * std.crypto.random.float(f32);
+        //    ship.pos = display_center.plus(V.unit(new_angle).scaled(500));
+        //    continue;
+        //}
+
+        const rotate_input = // convert to 1.0 or -1.0
+            @as(f32, @floatFromInt(@intFromBool(ship.input.right))) -
+            @as(f32, @floatFromInt(@intFromBool(ship.input.left)));
+        ship.rotation = @mod(
+            ship.rotation + rotate_input * ship.rotation_vel * dt,
+            2 * math.pi,
+        );
+
+        // convert to 1.0 or 0.0
+        const thrust_input: f32 = @floatFromInt(@intFromBool(ship.input.forward));
+        const thrust = V.unit(ship.rotation);
+        ship.vel.add(thrust.scaled(thrust_input * ship.thrust * dt));
+
+        const turret = &ship.turret;
+        {
+            turret.cooldown -= dt;
+            if (ship.input.fire and turret.cooldown <= 0) {
+                turret.cooldown = turret.cooldown_amount;
+                //try bullets.append(.{
+                //    .sprite = bullet_small,
+                //    .pos = ship.pos.plus(V.unit(ship.rotation + turret.angle).scaled(turret.radius)),
+                //    .vel = V.unit(ship.rotation).scaled(turret.bullet_speed).plus(ship.vel),
+                //    .duration = turret.bullet_duration,
+                //    .radius = 2,
+                //    .damage = turret.bullet_damage,
+                //});
+            }
+        }
+    }
+
+    display(dt);
+}
+
+fn display(dt: f32) void {
+    for (game.ships.items) |*ship| {
+        const sprite = game.assets.animate(&ship.anim_playback, dt);
+        std.log.debug("pos = {any} size = {any}", .{ ship.pos, sprite.size });
+        js.drawImage(
+            sprite.index,
+            .fromVec(ship.pos, sprite.size),
+            // The ship asset images point up instead of to the right.
+            ship.rotation + math.pi / 2.0,
+        );
+
+        // HP bar
+        //if (ship.hp < ship.max_hp) {
+        //    const health_bar_size: V = .{ .x = 32, .y = 4 };
+        //    var start = ship.pos.minus(health_bar_size.scaled(0.5)).floored();
+        //    start.y -= ship.radius + health_bar_size.y;
+        //    sdlAssertZero(c.SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, 0xff));
+        //    sdlAssertZero(c.SDL_RenderFillRect(renderer, &sdlRect(
+        //        start.minus(.{ .x = 1, .y = 1 }),
+        //        health_bar_size.plus(.{ .x = 2, .y = 2 }),
+        //    )));
+        //    const hp_percent = ship.hp / ship.max_hp;
+        //    if (hp_percent > 0.45) {
+        //        sdlAssertZero(c.SDL_SetRenderDrawColor(renderer, 0x00, 0x94, 0x13, 0xff));
+        //    } else {
+        //        sdlAssertZero(c.SDL_SetRenderDrawColor(renderer, 0xe2, 0x00, 0x03, 0xff));
+        //    }
+        //    sdlAssertZero(c.SDL_RenderFillRect(renderer, &sdlRect(
+        //        start,
+        //        .{ .x = health_bar_size.x * hp_percent, .y = health_bar_size.y },
+        //    )));
+        //}
+    }
 }
 
 const Sprite = struct {
+    index: Index,
     pos: V,
     size: V,
 
@@ -333,11 +450,13 @@ const Assets = struct {
         return a.sprites.items[@intFromEnum(index)];
     }
 
-    fn loadSprite(a: *Assets, name: []const u8) !Sprite.Index {
-        const size = js.loadImage(name.ptr, name.len);
+    fn loadSprite(a: *Assets, name: []const u8, size: V) !Sprite.Index {
+        js.loadImage(name.ptr, name.len);
+        const index: Sprite.Index = @enumFromInt(a.sprites.items.len);
         try a.sprites.append(gpa, .{
+            .index = index,
             .pos = .{ .x = 0, .y = 0 },
-            .size = .{ .x = size.x, .y = size.y },
+            .size = size,
         });
         return @enumFromInt(a.sprites.items.len - 1);
     }

@@ -42,8 +42,13 @@ WebAssembly.instantiateStreaming(fetch("main.wasm"), {
       context.fillStyle = "white";
       context.fillText(msg, x, y);
     },
-    drawImage: function(img, x, y) {
-      context.drawImage(images[img], x, y);
+    drawImage: function(img, rect, radians) {
+      const r = unwrapRect(rect);
+      context.save();
+      context.translate(r.w / 2, r.h / 2);
+      context.rotate(radians);
+      context.drawImage(images[img], r.x, r.y, r.w, r.h);
+      context.restore();
     },
     loadImage: function(ptr, len) {
       const path = decodeString(ptr, len);
@@ -164,3 +169,21 @@ function decodeString(ptr, len) {
   return text_decoder.decode(new Uint8Array(wasm_exports.memory.buffer, ptr, len));
 }
 
+function unwrapString(bigint) {
+  const ptr = Number(bigint & 0xffffffffn);
+  const len = Number(bigint >> 32n);
+  return decodeString(ptr, len);
+}
+
+function unwrapRect(bigint) {
+  return {
+    x: Number((bigint >>  0n) & 0xffffn),
+    y: Number((bigint >> 16n) & 0xffffn),
+    w: Number((bigint >> 32n) & 0xffffn),
+    h: Number((bigint >> 48n) & 0xffffn),
+  };
+}
+
+function wrapSize(w, h) {
+  return (BigInt(h) << 0xffffn) | BigInt(w);
+}
