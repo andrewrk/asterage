@@ -45,17 +45,22 @@ WebAssembly.instantiateStreaming(fetch("main.wasm"), {
   wasm_exports = obj.instance.exports;
   window.wasm = obj; // for debugging
 
-  // For testing in browser, hook up the keyboard. The real arcade cabinet
-  // causes these addEventListener calls to throw an error.
-  try {
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-  } catch {
-    listenInput();
-  }
-
+  // For testing in browser, hook up the keyboard. The listeners will never
+  // fire on the real arcade cabinet.
+  addBrowserListeners();
+  addCabinetListeners();
   update();
 });
+
+function addBrowserListeners() {
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+}
+
+function removeBrowserListeners() {
+  window.removeEventListener('keydown', onKeyDown);
+  window.removeEventListener('keyup', onKeyUp);
+}
 
 function onKeyDown(ev) {
   switch (ev.code) {
@@ -91,7 +96,7 @@ function onKeyUp(ev) {
   }
 }
 
-function listenInput() {
+function addCabinetListeners() {
   const name = "@rcade/input-classic";
   const version = "^1.0.0";
   const nonce = Math.random().toString(36).substring(2, 15) +
@@ -108,6 +113,7 @@ function listenInput() {
     if (event.data.type !== 'plugin_channel' || event.data.nonce !== nonce) return;
 
     window.removeEventListener('message', onMessage);
+    removeBrowserListeners(); // Arcade cabinet mode detected.
 
     if (event.data.error != null) throw new Error(event.data.error);
 
