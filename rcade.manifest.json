@@ -1,12 +1,12 @@
 {
   "$schema": "https://rcade.dev/manifest.schema.json",
-  "name": "asterage",
-  "display_name": "Asterage 2P",
-  "description": "Multiplayer space dogfighting",
+  "name": "game name here",
+  "display_name": "game display name here",
+  "description": "game description here",
   "visibility": "public",
   "authors": [
     {
-      "display_name": "Andrew Kelley"
+      "display_name": "Your Name"
     }
   ],
   "dependencies": [

@@ -1,7 +1,0 @@
-.{
-    .name = .asterage,
-    .version = "0.0.0",
-    .minimum_zig_version = "0.16.0",
-    .paths = .{""},
-    .fingerprint = 0xfac5a3a704b8e2fb,
-}

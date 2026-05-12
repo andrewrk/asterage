@@ -1,10 +1,6 @@
-# Asterage 2P
+# Your Title Here
 
-Multiplayer space dogfighting
-
-## Current Status
-
-Counts frames.
+Your description here
 
 ## About RCade
 
@@ -14,7 +10,7 @@ cabinet at The Recurse Center. Learn more about the project at
 
 ## Prerequisites
 
-Zig 0.16.0
+[Zig 0.16.0](https://ziglang.org/download/#release-0.16.0)
 
 ## Testing
 
@@ -22,6 +18,12 @@ Start the development server:
 
 ```
 zig build serve
+```
+
+You can pass arguments like this:
+
+```
+zig build serve -- -p 33121
 ```
 
 ## Development Build
