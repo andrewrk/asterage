@@ -521,6 +521,41 @@ fn display(dt: f32) void {
             ship.rotation + math.pi / 2.0,
             0.5,
         );
+        js.drawImage(sprite.index,
+            ship.pos.x - display_size.w,
+            ship.pos.y,
+            sprite.size.x,
+            sprite.size.y,
+            ship.rotation + math.pi / 2.0,
+            0.5,
+        );
+        js.drawImage(
+            sprite.index,
+            ship.pos.x + display_size.w,
+            ship.pos.y,
+            sprite.size.x,
+            sprite.size.y,
+            ship.rotation + math.pi / 2.0,
+            0.5,
+        );
+        js.drawImage(
+            sprite.index,
+            ship.pos.x,
+            ship.pos.y + display_size.h,
+            sprite.size.x,
+            sprite.size.y,
+            ship.rotation + math.pi / 2.0,
+            0.5,
+        );
+        js.drawImage(
+            sprite.index,
+            ship.pos.x,
+            ship.pos.y - display_size.h,
+            sprite.size.x,
+            sprite.size.y,
+            ship.rotation + math.pi / 2.0,
+            0.5,
+        );
 
         // HP bar
         //if (ship.hp < ship.max_hp) {
