@@ -120,6 +120,8 @@ const Game = struct {
     bullet_small: Sprite.Index = undefined,
     stars: [150]Star = undefined,
     shrapnel_animations: [3]Animation.Index = undefined,
+    explosion_animation: Animation.Index = undefined,
+    ranger_template: Ship = undefined,
 };
 
 const Bullet = struct {
@@ -288,6 +290,21 @@ fn setupFallible() !void {
         ship_sprites[1],
     }, ship_steady_thrust, 10);
 
+    game.explosion_animation = try assets.addAnimation(&.{
+        try assets.loadSprite("img/explosion/01.png", .{ .x = 63, .y = 83 }),
+        try assets.loadSprite("img/explosion/02.png", .{ .x = 63, .y = 83 }),
+        try assets.loadSprite("img/explosion/03.png", .{ .x = 63, .y = 83 }),
+        try assets.loadSprite("img/explosion/04.png", .{ .x = 63, .y = 83 }),
+        try assets.loadSprite("img/explosion/05.png", .{ .x = 63, .y = 83 }),
+        try assets.loadSprite("img/explosion/06.png", .{ .x = 63, .y = 83 }),
+        try assets.loadSprite("img/explosion/07.png", .{ .x = 63, .y = 83 }),
+        try assets.loadSprite("img/explosion/08.png", .{ .x = 63, .y = 83 }),
+        try assets.loadSprite("img/explosion/09.png", .{ .x = 63, .y = 83 }),
+        try assets.loadSprite("img/explosion/10.png", .{ .x = 63, .y = 83 }),
+        try assets.loadSprite("img/explosion/11.png", .{ .x = 63, .y = 83 }),
+        try assets.loadSprite("img/explosion/12.png", .{ .x = 63, .y = 83 }),
+    }, .none, 30);
+
     const ship_radius = assets.sprite(ship_sprites[0]).size.x / 2.0;
 
     const ship_turret: Turret = .{
@@ -300,7 +317,7 @@ fn setupFallible() !void {
         .bullet_damage = 10,
     };
 
-    const ranger_template: Ship = .{
+    game.ranger_template = .{
         .input = .{},
         .prev_input = .{},
         .still = ship_still,
@@ -320,7 +337,7 @@ fn setupFallible() !void {
     const ships = &game.ships;
 
     for (&game.players, 0..) |_, i| {
-        try ships.append(gpa, ranger_template);
+        try ships.append(gpa, game.ranger_template);
         ships.items[ships.items.len - 1].pos = .{
             .x = 20 + 100 * @as(f32, @floatFromInt(i)),
             .y = 20,
@@ -338,6 +355,10 @@ const Star = struct {
 };
 
 const display_size: Size = .{ .w = 336, .h = 262 };
+const display_center: V = .{
+    .x = @as(f32, @floatFromInt(display_size.w)) / 2.0,
+    .y = @as(f32, @floatFromInt(display_size.h)) / 2.0,
+};
 
 fn generateStars(stars: []Star) void {
     const rng = game.rng.random();
@@ -435,22 +456,22 @@ export fn update() void {
         ship.pos.y = @mod(ship.pos.y, display_size.h);
 
         // explode ships that reach 0 hp
-        //if (ship.hp <= 0) {
-        //    // spawn explosion here
-        //    try decorations.append(.{
-        //        .anim_playback = .{ .index = explosion_animation, .time_passed = 0 },
-        //        .pos = ship.pos,
-        //        .vel = ship.vel,
-        //        .rotation = 0,
-        //        .rotation_vel = 0,
-        //        .duration = 100,
-        //    });
-        //    // delete ship and spawn it somewhere else
-        //    ship.* = ranger_template;
-        //    const new_angle = math.pi * 2 * rng.float(f32);
-        //    ship.pos = display_center.plus(V.unit(new_angle).scaled(500));
-        //    continue;
-        //}
+        if (ship.hp <= 0) {
+            // spawn explosion here
+            game.decorations.append(gpa, .{
+                .anim_playback = .{ .index = game.explosion_animation, .time_passed = 0 },
+                .pos = ship.pos,
+                .vel = ship.vel,
+                .rotation = 0,
+                .rotation_vel = 0,
+                .duration = 100,
+            }) catch {};
+            // delete ship and spawn it somewhere else
+            ship.* = game.ranger_template;
+            const new_angle = math.pi * 2 * rng.float(f32);
+            ship.pos = display_center.plus(V.unit(new_angle).scaled(500));
+            continue;
+        }
 
         const rotate_input = // convert to 1.0 or -1.0
             @as(f32, @floatFromInt(@intFromBool(ship.input.right))) -
