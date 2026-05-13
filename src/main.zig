@@ -317,7 +317,7 @@ fn setupFallible() !void {
         try assets.loadSprite("img/explosion/12.png", .{ .x = 63, .y = 83 }),
     }, .none, 30);
 
-    const ship_radius = assets.sprite(ship_sprites[0]).size.x / 2.0;
+    const ship_radius = 12;
 
     const ship_turret: Turret = .{
         .radius = ship_radius,
@@ -609,6 +609,7 @@ fn display(dt: f32) void {
 
     for (game.ships.items) |*ship| {
         const sprite = game.assets.animate(&ship.anim_playback, dt);
+        const scale: f32 = ship.radius / (sprite.size.x / 2.0);
         js.drawImage(
             sprite.index,
             ship.pos.x,
@@ -617,7 +618,7 @@ fn display(dt: f32) void {
             sprite.size.y,
             // The ship asset images point up instead of to the right.
             ship.rotation + math.pi / 2.0,
-            0.5,
+            scale,
         );
         js.drawImage(
             sprite.index,
@@ -626,7 +627,7 @@ fn display(dt: f32) void {
             sprite.size.x,
             sprite.size.y,
             ship.rotation + math.pi / 2.0,
-            0.5,
+            scale,
         );
         js.drawImage(
             sprite.index,
@@ -635,7 +636,7 @@ fn display(dt: f32) void {
             sprite.size.x,
             sprite.size.y,
             ship.rotation + math.pi / 2.0,
-            0.5,
+            scale,
         );
         js.drawImage(
             sprite.index,
@@ -644,7 +645,7 @@ fn display(dt: f32) void {
             sprite.size.x,
             sprite.size.y,
             ship.rotation + math.pi / 2.0,
-            0.5,
+            scale,
         );
         js.drawImage(
             sprite.index,
@@ -653,7 +654,7 @@ fn display(dt: f32) void {
             sprite.size.x,
             sprite.size.y,
             ship.rotation + math.pi / 2.0,
-            0.5,
+            scale,
         );
 
         // HP bar
