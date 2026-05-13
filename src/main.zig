@@ -167,6 +167,8 @@ const Ship = struct {
     /// radians
     rotation: f32,
     radius: f32,
+    collision_damping: f32,
+    density: f32,
 
     /// radians per second
     rotation_vel: f32,
@@ -330,6 +332,8 @@ fn setupFallible() !void {
         .thrust = 150,
         .turret = ship_turret,
         .radius = ship_radius,
+        .collision_damping = 0.4,
+        .density = 0.02,
         .hp = 80,
         .max_hp = 80,
     };
@@ -473,6 +477,68 @@ export fn update() void {
             continue;
         }
 
+        // bonk
+        for (game.ships.items) |*other| {
+            const added_radii = ship.radius + other.radius;
+            if (ship.pos.distanceSqrd(other.pos) > added_radii * added_radii) continue;
+
+            // calculate normal
+            const normal = other.pos.minus(ship.pos).normalized();
+            // calculate relative velocity
+            const rv = other.vel.minus(ship.vel);
+            // calculate relative velocity in terms of the normal direction
+            const vel_along_normal = rv.dot(normal);
+            // do not resolve if velocities are separating
+            if (vel_along_normal > 0) continue;
+            // calculate restitution
+            const e = @min(ship.collision_damping, other.collision_damping);
+            // calculate impulse scalar
+            var j: f32 = -(1.0 + e) * vel_along_normal;
+            const my_mass = mass(ship.density, ship.radius);
+            const other_mass = mass(other.density, other.radius);
+            j /= 1.0 / my_mass + 1.0 / other_mass;
+            // apply impulse
+            const impulse = normal.scaled(j);
+            const ship_impulse = impulse.scaled(1 / my_mass);
+            const other_impulse = impulse.scaled(1 / other_mass);
+            ship.vel.sub(ship_impulse);
+            other.vel.add(other_impulse);
+            // Deal HP damage relative to the change in velocity.
+            // A very gentle bonk is something like impulse 20, while a
+            // very hard bonk is around 300.
+            // The basic ranger ship has 80 HP.
+            const ship_damage = remap(20, 300, 0, 80, ship_impulse.length());
+            const other_damage = remap(20, 300, 0, 80, other_impulse.length());
+            ship.hp -= ship_damage;
+            other.hp -= other_damage;
+
+            const shrapnel_amt: u32 = @floor(
+                remap_clamped(0, 100, 0, 30, ship_damage + other_damage),
+            );
+            const shrapnel_center = ship.pos.plus(other.pos).scaled(0.5);
+            const avg_vel = ship.vel.plus(other.vel).scaled(0.5);
+            for (0..shrapnel_amt) |_| {
+                const shrapnel_animation = game.shrapnel_animations[
+                    rng.uintLessThanBiased(usize, game.shrapnel_animations.len)
+                ];
+                // Spawn slightly off center from collision point.
+                const random_offset = V.unit(rng.float(f32) * math.pi * 2)
+                    .scaled(rng.float(f32) * 10);
+                // Give them random velocities.
+                const base_vel = if (rng.boolean()) ship.vel else other.vel;
+                const random_vel = V.unit(rng.float(f32) * math.pi * 2)
+                    .scaled(rng.float(f32) * base_vel.length() * 2);
+                game.decorations.append(gpa, .{
+                    .anim_playback = .{ .index = shrapnel_animation, .time_passed = 0 },
+                    .pos = shrapnel_center.plus(random_offset),
+                    .vel = avg_vel.plus(random_vel),
+                    .rotation = 2 * math.pi * rng.float(f32),
+                    .rotation_vel = 2 * math.pi * rng.float(f32),
+                    .duration = 2,
+                }) catch {};
+            }
+        }
+
         const rotate_input = // convert to 1.0 or -1.0
             @as(f32, @floatFromInt(@intFromBool(ship.input.right))) -
             @as(f32, @floatFromInt(@intFromBool(ship.input.left)));
@@ -542,7 +608,8 @@ fn display(dt: f32) void {
             ship.rotation + math.pi / 2.0,
             0.5,
         );
-        js.drawImage(sprite.index,
+        js.drawImage(
+            sprite.index,
             ship.pos.x - display_size.w,
             ship.pos.y,
             sprite.size.x,
@@ -692,3 +759,44 @@ const Assets = struct {
         return @enumFromInt(a.sprites.items.len - 1);
     }
 };
+
+/// Linearly interpolates between `start` and `end` by `t`.
+fn lerp(start: f32, end: f32, t: f32) f32 {
+    return (1.0 - t) * start + t * end;
+}
+
+fn lerp_clamped(start: f32, end: f32, t: f32) f32 {
+    return lerp(start, end, math.clamp(t, 0.0, 1.0));
+}
+
+fn ilerp(start: f32, end: f32, value: f32) f32 {
+    return (value - start) / (end - start);
+}
+
+fn ilerp_clamped(start: f32, end: f32, value: f32) f32 {
+    return math.clamp(ilerp(start, end, value), 0.0, 1.0);
+}
+
+fn remap_clamped(
+    start_in: f32,
+    end_in: f32,
+    start_out: f32,
+    end_out: f32,
+    value: f32,
+) f32 {
+    return lerp(start_out, end_out, ilerp_clamped(start_in, end_in, value));
+}
+
+fn remap(
+    start_in: f32,
+    end_in: f32,
+    start_out: f32,
+    end_out: f32,
+    value: f32,
+) f32 {
+    return lerp(start_out, end_out, ilerp(start_in, end_in, value));
+}
+
+fn mass(density: f32, radius: f32) f32 {
+    return density * math.pi * radius * radius;
+}
