@@ -166,10 +166,44 @@ const Player = struct {
     ship: Ship.Index,
 };
 
-const Ship = struct {
+const ShipSprite = struct {
+    size: f32,
     still: Animation.Index,
     accel: Animation.Index,
     anim_playback: Animation.Playback,
+
+    fn fromPath(comptime path: []const u8) !ShipSprite {
+        const assets = &game.assets;
+        const ship_sprites = [_]Sprite.Index{
+            try assets.loadSprite(path ++ "0.png", .{ .x = 32, .y = 32 }),
+            try assets.loadSprite(path ++ "1.png", .{ .x = 32, .y = 32 }),
+            try assets.loadSprite(path ++ "2.png", .{ .x = 32, .y = 32 }),
+            try assets.loadSprite(path ++ "3.png", .{ .x = 32, .y = 32 }),
+        };
+        const ship_still = try assets.addAnimation(&.{
+            ship_sprites[0],
+        }, null, 30);
+        const ship_steady_thrust = try assets.addAnimation(&.{
+            ship_sprites[2],
+            ship_sprites[3],
+        }, null, 10);
+        const ship_accel = try assets.addAnimation(&.{
+            ship_sprites[0],
+            ship_sprites[1],
+        }, ship_steady_thrust, 10);
+
+        return .{
+            .size = assets.sprite(ship_sprites[0]).size.x,
+            .accel = ship_accel,
+            .still = ship_still,
+            .anim_playback = .{ .index = ship_still, .time_passed = 0 },
+        };
+    }
+};
+
+
+const Ship = struct {
+    sprite: ShipSprite,
     /// pixels
     pos: V,
     /// pixels per second
@@ -212,7 +246,7 @@ const Ship = struct {
     };
 
     fn setAnimation(ship: *Ship, animation: Animation.Index) void {
-        ship.anim_playback = .{
+        ship.sprite.anim_playback = .{
             .index = animation,
             .time_passed = 0,
         };
@@ -284,24 +318,6 @@ fn setupFallible() !void {
 
     game.bullet_small = try assets.loadSprite("img/bullet/small.png", .{ .x = 8, .y = 24 });
 
-    const ship_sprites = [_]Sprite.Index{
-        try assets.loadSprite("img/ship/ranger0.png", .{ .x = 32, .y = 32 }),
-        try assets.loadSprite("img/ship/ranger1.png", .{ .x = 32, .y = 32 }),
-        try assets.loadSprite("img/ship/ranger2.png", .{ .x = 32, .y = 32 }),
-        try assets.loadSprite("img/ship/ranger3.png", .{ .x = 32, .y = 32 }),
-    };
-    const ship_still = try assets.addAnimation(&.{
-        ship_sprites[0],
-    }, null, 30);
-    const ship_steady_thrust = try assets.addAnimation(&.{
-        ship_sprites[2],
-        ship_sprites[3],
-    }, null, 10);
-    const ship_accel = try assets.addAnimation(&.{
-        ship_sprites[0],
-        ship_sprites[1],
-    }, ship_steady_thrust, 10);
-
     game.explosion_animation = try assets.addAnimation(&.{
         try assets.loadSprite("img/explosion/01.png", .{ .x = 63, .y = 83 }),
         try assets.loadSprite("img/explosion/02.png", .{ .x = 63, .y = 83 }),
@@ -317,10 +333,9 @@ fn setupFallible() !void {
         try assets.loadSprite("img/explosion/12.png", .{ .x = 63, .y = 83 }),
     }, .none, 30);
 
-    const ship_radius = 12;
-
-    const ship_turret: Turret = .{
-        .radius = ship_radius,
+    const ranger_sprite = try ShipSprite.fromPath("img/ship/ranger");
+    const ranger_turret: Turret = .{
+        .radius = 12,
         .angle = 0,
         .cooldown = 0,
         .cooldown_amount = 0.2,
@@ -332,34 +347,65 @@ fn setupFallible() !void {
     game.ranger_template = .{
         .input = .{},
         .prev_input = .{},
-        .still = ship_still,
-        .accel = ship_accel,
-        .anim_playback = .{ .index = ship_still, .time_passed = 0 },
+        .sprite = ranger_sprite,
         .pos = .{ .x = 0, .y = 0 },
         .vel = .{ .x = 0, .y = 0 },
         .rotation = -math.pi / 2.0,
         .rotation_vel = math.pi * 1.1,
         .thrust = 150,
-        .turret = ship_turret,
-        .radius = ship_radius,
         .collision_damping = 0.4,
         .density = 0.02,
+        .turret = ranger_turret,
+        .radius = 12,
         .hp = 80,
         .max_hp = 80,
     };
 
+    const militia_sprite = try ShipSprite.fromPath("img/ship/militia");
+    const militia_radius = ranger_sprite.size / 2.0;
+    const militia_turret: Turret = .{
+        .radius = militia_radius,
+        .angle = 0,
+        .cooldown = 0,
+        .cooldown_amount = 0.1,
+        .bullet_speed = 1000,
+        .bullet_duration = 0.5,
+        .bullet_damage = 20,
+    };
+    const militia_template: Ship = .{
+        .input = .{},
+        .prev_input = .{},
+        .sprite = militia_sprite,
+        .pos = .{ .x = 0, .y = 0 },
+        .vel = .{ .x = 0, .y = 0 },
+        .rotation = -math.pi / 2.0,
+        .rotation_vel = math.pi * 1.3,
+        .thrust = 100,
+        .collision_damping = 0.6,
+        .density = 0.04,
+        .turret = militia_turret,
+        .radius = militia_radius,
+        .hp = 160,
+        .max_hp = 160,
+    };
+
     const ships = &game.ships;
 
-    for (&game.players, 0..) |_, i| {
-        try ships.append(gpa, game.ranger_template);
-        ships.items[ships.items.len - 1].pos = .{
-            .x = 20 + 100 * @as(f32, @floatFromInt(i)),
-            .y = 20,
-        };
-    }
+    //for (&game.players, 0..) |_, i| {
+    //    try ships.append(gpa, game.ranger_template);
+    //    ships.items[ships.items.len - 1].pos = .{
+    //        .x = 20 + 100 * @as(f32, @floatFromInt(i)),
+    //        .y = 20,
+    //    };
+    //}
+    try ships.append(gpa, game.ranger_template);
+    ships.items[0].pos = .{ .x = 20, .y = 20 };
+    try ships.append(gpa, militia_template);
+    ships.items[1].pos = .{ .x = 160, .y = 20 };
 
     generateStars(&game.stars);
 }
+
 fn loadSound(sound: []const u8) void {
     js.loadSound(sound.ptr, sound.len);
 }
@@ -408,9 +454,9 @@ export fn update() void {
             .fire = button.a,
         };
         if (!ship.prev_input.forward and ship.input.forward) {
-            ship.setAnimation(ship.accel);
+            ship.setAnimation(ship.sprite.accel);
         } else if (ship.prev_input.forward and !ship.input.forward) {
-            ship.setAnimation(ship.still);
+            ship.setAnimation(ship.sprite.still);
         }
         ship.prev_input = ship.input;
     }
@@ -608,7 +654,7 @@ fn display(dt: f32) void {
     }
 
     for (game.ships.items) |*ship| {
-        const sprite = game.assets.animate(&ship.anim_playback, dt);
+        const sprite = game.assets.animate(&ship.sprite.anim_playback, dt);
         const scale: f32 = ship.radius / (sprite.size.x / 2.0);
         js.drawImage(
             sprite.index,
