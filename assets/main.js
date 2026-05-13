@@ -42,9 +42,9 @@ WebAssembly.instantiateStreaming(fetch("main.wasm"), {
       context.fillStyle = "white";
       context.fillText(msg, x, y);
     },
-    fillRect: function(rect) {
+    fillRect: function(color, rect) {
       const r = unwrapRect(rect);
-      context.fillStyle = "white";
+      context.fillStyle = unwrapColor(color);
       context.fillRect(r.x, r.y, r.w, r.h);
     },
     drawImage: function(img, x, y, w, h, radians, scale) {
@@ -190,6 +190,19 @@ function unwrapRect(bigint) {
   };
 }
 
+function unwrapColor(x) {
+    return "#" +
+      hex(((x >>  0) & 0xff)) +
+      hex(((x >>  8) & 0xff)) +
+      hex(((x >> 16) & 0xff)) +
+      hex(((x >> 24) & 0xff));
+}
+
 function wrapSize(w, h) {
   return (BigInt(h) << 0xffffn) | BigInt(w);
+}
+
+function hex(x) {
+  const result = x.toString(16);
+  return result.length === 1 ? "0" + result : result;
 }

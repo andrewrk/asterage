@@ -13,7 +13,7 @@ const js = struct {
     extern "js" fn panic(ptr: [*]const u8, len: usize) noreturn;
     extern "js" fn buttons(ptr: [*]u8, len: usize) void;
     extern "js" fn fillText(ptr: [*]const u8, len: usize, size: u16, x: u16, y: u16) void;
-    extern "js" fn fillRect(Rect) void;
+    extern "js" fn fillRect(Color, Rect) void;
     extern "js" fn drawImage(img: Sprite.Index, x: f32, y: f32, w: f32, h: f32, radians: f32, scale: f32) void;
     extern "js" fn loadSound(ptr: [*]const u8, len: usize) void;
     extern "js" fn playSound(sound: usize) void;
@@ -80,6 +80,16 @@ const Rect = packed struct(u64) {
             .h = @trunc(size.y),
         };
     }
+};
+
+const Color = packed struct(u32) {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8 = 0xff,
+
+    const white: Color = .{ .r = 0xff, .g = 0xff, .b = 0xff };
+    const black: Color = .{ .r = 0x00, .g = 0x00, .b = 0x00 };
 };
 
 const Size = packed struct(u64) {
@@ -479,6 +489,7 @@ export fn update() void {
 
         // bonk
         for (game.ships.items) |*other| {
+            if (other == ship) continue;
             const added_radii = ship.radius + other.radius;
             if (ship.pos.distanceSqrd(other.pos) > added_radii * added_radii) continue;
 
@@ -593,7 +604,7 @@ export fn update() void {
 
 fn display(dt: f32) void {
     for (game.stars) |star| {
-        js.fillRect(star.rect);
+        js.fillRect(.white, star.rect);
     }
 
     for (game.ships.items) |*ship| {
@@ -646,26 +657,29 @@ fn display(dt: f32) void {
         );
 
         // HP bar
-        //if (ship.hp < ship.max_hp) {
-        //    const health_bar_size: V = .{ .x = 32, .y = 4 };
-        //    var start = ship.pos.minus(health_bar_size.scaled(0.5)).floored();
-        //    start.y -= ship.radius + health_bar_size.y;
-        //    sdlAssertZero(c.SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, 0xff));
-        //    sdlAssertZero(c.SDL_RenderFillRect(renderer, &sdlRect(
-        //        start.minus(.{ .x = 1, .y = 1 }),
-        //        health_bar_size.plus(.{ .x = 2, .y = 2 }),
-        //    )));
-        //    const hp_percent = ship.hp / ship.max_hp;
-        //    if (hp_percent > 0.45) {
-        //        sdlAssertZero(c.SDL_SetRenderDrawColor(renderer, 0x00, 0x94, 0x13, 0xff));
-        //    } else {
-        //        sdlAssertZero(c.SDL_SetRenderDrawColor(renderer, 0xe2, 0x00, 0x03, 0xff));
-        //    }
-        //    sdlAssertZero(c.SDL_RenderFillRect(renderer, &sdlRect(
-        //        start,
-        //        .{ .x = health_bar_size.x * hp_percent, .y = health_bar_size.y },
-        //    )));
-        //}
+        if (ship.hp < ship.max_hp) {
+            const health_bar_size: V = .{ .x = 32, .y = 4 };
+            var start = ship.pos.minus(health_bar_size.scaled(0.5)).floored();
+            start.y -= ship.radius + health_bar_size.y;
+            js.fillRect(.white, .{
+                .x = @trunc(start.x - 1),
+                .y = @trunc(start.y - 1),
+                .w = @trunc(health_bar_size.x + 2),
+                .h = @trunc(health_bar_size.y + 2),
+            });
+            const hp_percent = ship.hp / ship.max_hp;
+            const color: Color = if (hp_percent > 0.45)
+                .{ .r = 0x00, .g = 0x94, .b = 0x13, .a = 0xff }
+            else
+                .{ .r = 0xe2, .g = 0x00, .b = 0x03, .a = 0xff };
+
+            js.fillRect(color, .{
+                .x = @trunc(start.x),
+                .y = @trunc(start.y),
+                .w = @trunc(health_bar_size.x * hp_percent),
+                .h = @trunc(health_bar_size.y),
+            });
+        }
     }
 
     for (game.bullets.items) |bullet| {
