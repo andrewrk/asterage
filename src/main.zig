@@ -401,7 +401,7 @@ export fn update() void {
         ship.prev_input = ship.input;
     }
 
-    const dt = 1.0 / 120.0;
+    const dt = 1.0 / 60.0;
     const rng = game.rng.random();
 
     {
@@ -542,7 +542,8 @@ fn display(dt: f32) void {
             ship.rotation + math.pi / 2.0,
             0.5,
         );
-        js.drawImage(sprite.index,
+        js.drawImage(
+            sprite.index,
             ship.pos.x - display_size.w,
             ship.pos.y,
             sprite.size.x,
@@ -578,27 +579,22 @@ fn display(dt: f32) void {
             0.5,
         );
 
-        // HP bar
-        //if (ship.hp < ship.max_hp) {
-        //    const health_bar_size: V = .{ .x = 32, .y = 4 };
-        //    var start = ship.pos.minus(health_bar_size.scaled(0.5)).floored();
-        //    start.y -= ship.radius + health_bar_size.y;
-        //    sdlAssertZero(c.SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, 0xff));
-        //    sdlAssertZero(c.SDL_RenderFillRect(renderer, &sdlRect(
-        //        start.minus(.{ .x = 1, .y = 1 }),
-        //        health_bar_size.plus(.{ .x = 2, .y = 2 }),
-        //    )));
-        //    const hp_percent = ship.hp / ship.max_hp;
-        //    if (hp_percent > 0.45) {
-        //        sdlAssertZero(c.SDL_SetRenderDrawColor(renderer, 0x00, 0x94, 0x13, 0xff));
-        //    } else {
-        //        sdlAssertZero(c.SDL_SetRenderDrawColor(renderer, 0xe2, 0x00, 0x03, 0xff));
-        //    }
-        //    sdlAssertZero(c.SDL_RenderFillRect(renderer, &sdlRect(
-        //        start,
-        //        .{ .x = health_bar_size.x * hp_percent, .y = health_bar_size.y },
-        //    )));
-        //}
+        if (ship.hp < ship.max_hp) {
+            const minHealth = if (ship.hp < 0) 0 else ship.hp;
+            const maxHealthBarX = @divTrunc(sprite.size.x, 2);
+            const healthRatio: f32 = minHealth / ship.max_hp;
+            const curHealthBarX = healthRatio * maxHealthBarX;
+            const maxHealthBarY = 3;
+            const healthBarSize: V = .{ .x = curHealthBarX, .y = maxHealthBarY };
+
+            const rect = Rect{
+                .x = @intFromFloat(ship.pos.x - 8),
+                .y = @intFromFloat(ship.pos.y - 12),
+                .w = @intFromFloat(healthBarSize.x),
+                .h = @intFromFloat(healthBarSize.y),
+            };
+            js.fillRect(rect);
+        }
     }
 
     for (game.bullets.items) |bullet| {
