@@ -287,9 +287,9 @@ const Turret = struct {
     radius: f32,
     /// Together with radius, this is the location of the turret from the
     /// center of the containing object. Radians.
-    angle: f32,
+    angle: f32 = 0,
     /// Seconds until ready. Less than or equal to 0 means ready.
-    cooldown: f32,
+    cooldown: f32 = 0,
     /// Seconds until ready. Cooldown is set to this after firing.
     cooldown_amount: f32,
 
@@ -340,11 +340,9 @@ fn setupFallible() !void {
     const ranger_sprite = try ShipSprite.fromPath("img/ship/ranger");
     const ranger_turret: Turret = .{
         .radius = 12,
-        .angle = 0,
-        .cooldown = 0,
         .cooldown_amount = 0.2,
-        .bullet_speed = 500,
-        .bullet_duration = 0.5,
+        .bullet_speed = 200,
+        .bullet_duration = 0.7,
         .bullet_damage = 10,
     };
 
@@ -357,7 +355,7 @@ fn setupFallible() !void {
         .rotation = -math.pi / 2.0,
         .rotation_vel = math.pi * 1.1,
         .thrust = 150,
-        .collision_damping = 0.4,
+        .collision_damping = 0.2,
         .density = 0.02,
         .turret = ranger_turret,
         .radius = 12,
@@ -368,12 +366,10 @@ fn setupFallible() !void {
     const militia_sprite = try ShipSprite.fromPath("img/ship/militia");
     const militia_turret: Turret = .{
         .radius = 16,
-        .angle = 0,
-        .cooldown = 0,
-        .cooldown_amount = 0.1,
-        .bullet_speed = 1000,
-        .bullet_duration = 0.5,
-        .bullet_damage = 20,
+        .cooldown_amount = 0.15,
+        .bullet_speed = 300,
+        .bullet_duration = 0.55,
+        .bullet_damage = 15,
     };
     game.militia_template = .{
         .input = .{},
@@ -384,7 +380,7 @@ fn setupFallible() !void {
         .rotation = -math.pi / 2.0,
         .rotation_vel = math.pi * 1.3,
         .thrust = 100,
-        .collision_damping = 0.6,
+        .collision_damping = 0.4,
         .density = 0.04,
         .turret = militia_turret,
         .radius = 16,
@@ -395,12 +391,10 @@ fn setupFallible() !void {
     const artillery_sprite = try ShipSprite.fromPath("img/ship/artillery");
     const artillery_turret: Turret = .{
         .radius = 24,
-        .angle = 0,
-        .cooldown = 0,
-        .cooldown_amount = 0.05,
-        .bullet_speed = 1500,
+        .cooldown_amount = 0.1,
+        .bullet_speed = 325,
         .bullet_duration = 0.5,
-        .bullet_damage = 40,
+        .bullet_damage = 20,
     };
     game.artillery_template = .{
         .input = .{},
@@ -409,9 +403,9 @@ fn setupFallible() !void {
         .pos = .{ .x = 0, .y = 0 },
         .vel = .{ .x = 0, .y = 0 },
         .rotation = -math.pi / 2.0,
-        .rotation_vel = math.pi * 1.3,
+        .rotation_vel = math.pi * 1.0,
         .thrust = 75,
-        .collision_damping = 0.8,
+        .collision_damping = 0.6,
         .density = 0.08,
         .turret = artillery_turret,
         .radius = 24,
