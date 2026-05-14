@@ -70,6 +70,9 @@ WebAssembly.instantiateStreaming(fetch("main.wasm"), {
     playSound: function(sound) {
       sounds[sound].play();
     },
+    seed: function() {
+      return Math.random();
+    },
   },
 }).then(function(obj) {
   wasm_exports = obj.instance.exports;

@@ -18,6 +18,7 @@ const js = struct {
     extern "js" fn loadSound(ptr: [*]const u8, len: usize) void;
     extern "js" fn playSound(sound: usize) void;
     extern "js" fn loadImage(ptr: [*]const u8, len: usize) void;
+    extern "js" fn seed() f64;
 };
 
 pub const std_options: std.Options = .{
@@ -126,11 +127,13 @@ const Game = struct {
     rng: std.Random.DefaultPrng = .init(0),
     bullets: std.ArrayList(Bullet) = .empty,
     decorations: std.ArrayList(Decoration) = .empty,
+    rocks: std.ArrayList(Rock) = .empty,
     over: bool = false,
 
     bullet_small: Sprite.Index = undefined,
     stars: [150]Star = undefined,
     shrapnel_animations: [3]Animation.Index = undefined,
+    rock_animations: [3]Animation.Index = undefined,
     explosion_animation: Animation.Index = undefined,
     ranger_template: Ship = undefined,
     militia_template: Ship = undefined,
@@ -163,6 +166,21 @@ const Decoration = struct {
     rotation_vel: f32,
     /// seconds
     duration: f32,
+};
+
+const Rock = struct {
+    anim_playback: Animation.Playback,
+    /// pixels
+    pos: V,
+    /// pixels per second
+    vel: V,
+    /// radians
+    rotation: f32,
+    /// radians per second
+    rotation_vel: f32,
+    radius: f32,
+    collision_damping: f32,
+    density: f32,
 };
 
 const Player = struct {
@@ -204,7 +222,6 @@ const ShipSprite = struct {
         };
     }
 };
-
 
 const Ship = struct {
     sprite: ShipSprite,
@@ -306,8 +323,21 @@ export fn setup() void {
 }
 
 fn setupFallible() !void {
+    game.rng = .init(@bitCast(js.seed()));
+
     loadSound("sfx/weak_shot1.ogg");
     const assets = &game.assets;
+
+    const rock_sprites = [_]Sprite.Index{
+        try assets.loadSprite("img/rock-a.png", .{ .x = 232, .y = 200 }),
+        try assets.loadSprite("img/rock-b.png", .{ .x = 206, .y = 200 }),
+        try assets.loadSprite("img/rock-c.png", .{ .x = 200, .y = 144 }),
+    };
+    game.rock_animations = .{
+        try assets.addAnimation(&.{rock_sprites[0]}, null, 30),
+        try assets.addAnimation(&.{rock_sprites[1]}, null, 30),
+        try assets.addAnimation(&.{rock_sprites[2]}, null, 30),
+    };
 
     const shrapnel_sprites = [_]Sprite.Index{
         try assets.loadSprite("img/shrapnel/01.png", .{ .x = 7, .y = 7 }),
@@ -422,6 +452,24 @@ fn setupFallible() !void {
     ships.items[1].pos = .{ .x = width * 0.8, .y = display_center.y };
 
     generateStars(&game.stars);
+
+    const rng = game.rng.random();
+
+    // set up rocks
+    for (0..2) |_| {
+        const speed = 5 + rng.float(f32) * 120;
+        const anim_index = rng.uintLessThanBiased(usize, game.rock_animations.len);
+        try game.rocks.append(gpa, .{
+            .anim_playback = .{ .index = @enumFromInt(anim_index), .time_passed = 0 },
+            .pos = display_center.plus(V.unit(rng.float(f32)).scaled(50)).minus(.{ .x = 25, .y = 25 }),
+            .vel = V.unit(rng.float(f32) * math.pi * 2).scaled(speed),
+            .rotation = 0,
+            .rotation_vel = 2 * math.pi * rng.float(f32),
+            .radius = 5 + rng.float(f32) * 40.0,
+            .collision_damping = 1,
+            .density = 0.10,
+        });
+    }
 }
 
 fn loadSound(sound: []const u8) void {
@@ -518,6 +566,15 @@ export fn update() void {
                         .duration = 2,
                     }) catch {};
 
+                    continue;
+                }
+            }
+
+            for (game.rocks.items) |*rock| {
+                if (rock.pos.distanceSqrd(bullet.pos) <
+                    rock.radius * rock.radius + bullet.radius * bullet.radius)
+                {
+                    _ = bullets.swapRemove(i);
                     continue;
                 }
             }
@@ -620,6 +677,66 @@ export fn update() void {
             }
         }
 
+        for (game.rocks.items) |*other| {
+            const added_radii = ship.radius + other.radius;
+            if (ship.pos.distanceSqrd(other.pos) > added_radii * added_radii) continue;
+
+            // calculate normal
+            const normal = other.pos.minus(ship.pos).normalized();
+            // calculate relative velocity
+            const rv = other.vel.minus(ship.vel);
+            // calculate relative velocity in terms of the normal direction
+            const vel_along_normal = rv.dot(normal);
+            // do not resolve if velocities are separating
+            if (vel_along_normal > 0) continue;
+            // calculate restitution
+            const e = @min(ship.collision_damping, other.collision_damping);
+            // calculate impulse scalar
+            var j: f32 = -(1.0 + e) * vel_along_normal;
+            const my_mass = mass(ship.density, ship.radius);
+            const other_mass = mass(other.density, other.radius);
+            j /= 1.0 / my_mass + 1.0 / other_mass;
+            // apply impulse
+            const impulse = normal.scaled(j);
+            const ship_impulse = impulse.scaled(1 / my_mass);
+            const other_impulse = impulse.scaled(1 / other_mass);
+            ship.vel.sub(ship_impulse);
+            other.vel.add(other_impulse);
+            // Deal HP damage relative to the change in velocity.
+            // A very gentle bonk is something like impulse 20, while a
+            // very hard bonk is around 300.
+            // The basic ranger ship has 80 HP.
+            const ship_damage = remap(20, 300, 0, 80, ship_impulse.length());
+            const other_damage = remap(20, 300, 0, 80, other_impulse.length());
+            ship.hp -= ship_damage;
+
+            const shrapnel_amt: u32 = @floor(
+                remap_clamped(0, 100, 0, 30, ship_damage + other_damage),
+            );
+            const shrapnel_center = ship.pos.plus(other.pos).scaled(0.5);
+            const avg_vel = ship.vel.plus(other.vel).scaled(0.5);
+            for (0..shrapnel_amt) |_| {
+                const shrapnel_animation = game.shrapnel_animations[
+                    rng.uintLessThanBiased(usize, game.shrapnel_animations.len)
+                ];
+                // Spawn slightly off center from collision point.
+                const random_offset = V.unit(rng.float(f32) * math.pi * 2)
+                    .scaled(rng.float(f32) * 10);
+                // Give them random velocities.
+                const base_vel = if (rng.boolean()) ship.vel else other.vel;
+                const random_vel = V.unit(rng.float(f32) * math.pi * 2)
+                    .scaled(rng.float(f32) * base_vel.length() * 2);
+                game.decorations.append(gpa, .{
+                    .anim_playback = .{ .index = shrapnel_animation, .time_passed = 0 },
+                    .pos = shrapnel_center.plus(random_offset),
+                    .vel = avg_vel.plus(random_vel),
+                    .rotation = 2 * math.pi * rng.float(f32),
+                    .rotation_vel = 2 * math.pi * rng.float(f32),
+                    .duration = 2,
+                }) catch {};
+            }
+        }
+
         const rotate_input = // convert to 1.0 or -1.0
             @as(f32, @floatFromInt(@intFromBool(ship.input.right))) -
             @as(f32, @floatFromInt(@intFromBool(ship.input.left)));
@@ -645,6 +762,80 @@ export fn update() void {
                     .duration = turret.bullet_duration,
                     .radius = 2,
                     .damage = turret.bullet_damage,
+                }) catch {};
+            }
+        }
+    }
+
+    // update rocks
+    for (game.rocks.items) |*rock| {
+        rock.pos.add(rock.vel.scaled(dt));
+
+        // wrap positions
+        rock.pos.x = @mod(rock.pos.x, display_size.w);
+        rock.pos.y = @mod(rock.pos.y, display_size.h);
+
+        rock.rotation = @mod(
+            rock.rotation + rock.rotation_vel * dt,
+            2 * math.pi,
+        );
+
+        for (game.rocks.items) |*other| {
+            if (other == rock) continue;
+            const added_radii = rock.radius + other.radius;
+            if (rock.pos.distanceSqrd(other.pos) > added_radii * added_radii) continue;
+
+            // calculate normal
+            const normal = other.pos.minus(rock.pos).normalized();
+            // calculate relative velocity
+            const rv = other.vel.minus(rock.vel);
+            // calculate relative velocity in terms of the normal direction
+            const vel_along_normal = rv.dot(normal);
+            // do not resolve if velocities are separating
+            if (vel_along_normal > 0) continue;
+            // calculate restitution
+            const e = @min(rock.collision_damping, other.collision_damping);
+            // calculate impulse scalar
+            var j: f32 = -(1.0 + e) * vel_along_normal;
+            const my_mass = mass(rock.density, rock.radius);
+            const other_mass = mass(other.density, other.radius);
+            j /= 1.0 / my_mass + 1.0 / other_mass;
+            // apply impulse
+            const impulse = normal.scaled(j);
+            const ship_impulse = impulse.scaled(1 / my_mass);
+            const other_impulse = impulse.scaled(1 / other_mass);
+            rock.vel.sub(ship_impulse);
+            other.vel.add(other_impulse);
+            // Deal HP damage relative to the change in velocity.
+            // A very gentle bonk is something like impulse 20, while a
+            // very hard bonk is around 300.
+            // The basic ranger rock has 80 HP.
+            const ship_damage = remap(20, 300, 0, 80, ship_impulse.length());
+            const other_damage = remap(20, 300, 0, 80, other_impulse.length());
+
+            const shrapnel_amt: u32 = @floor(
+                remap_clamped(0, 100, 0, 30, ship_damage + other_damage),
+            );
+            const shrapnel_center = rock.pos.plus(other.pos).scaled(0.5);
+            const avg_vel = rock.vel.plus(other.vel).scaled(0.5);
+            for (0..shrapnel_amt) |_| {
+                const shrapnel_animation = game.shrapnel_animations[
+                    rng.uintLessThanBiased(usize, game.shrapnel_animations.len)
+                ];
+                // Spawn slightly off center from collision point.
+                const random_offset = V.unit(rng.float(f32) * math.pi * 2)
+                    .scaled(rng.float(f32) * 10);
+                // Give them random velocities.
+                const base_vel = if (rng.boolean()) rock.vel else other.vel;
+                const random_vel = V.unit(rng.float(f32) * math.pi * 2)
+                    .scaled(rng.float(f32) * base_vel.length() * 2);
+                game.decorations.append(gpa, .{
+                    .anim_playback = .{ .index = shrapnel_animation, .time_passed = 0 },
+                    .pos = shrapnel_center.plus(random_offset),
+                    .vel = avg_vel.plus(random_vel),
+                    .rotation = 2 * math.pi * rng.float(f32),
+                    .rotation_vel = 2 * math.pi * rng.float(f32),
+                    .duration = 2,
                 }) catch {};
             }
         }
@@ -759,6 +950,57 @@ fn display(dt: f32) void {
                 .h = @trunc(health_bar_size.y),
             });
         }
+    }
+
+    for (game.rocks.items) |*rock| {
+        const sprite = game.assets.animate(&rock.anim_playback, dt);
+        const scale: f32 = rock.radius / (sprite.size.x / 2.0);
+        js.drawImage(
+            sprite.index,
+            rock.pos.x,
+            rock.pos.y,
+            sprite.size.x,
+            sprite.size.y,
+            // The rock asset images point up instead of to the right.
+            rock.rotation + math.pi / 2.0,
+            scale,
+        );
+        js.drawImage(
+            sprite.index,
+            rock.pos.x - display_size.w,
+            rock.pos.y,
+            sprite.size.x,
+            sprite.size.y,
+            rock.rotation + math.pi / 2.0,
+            scale,
+        );
+        js.drawImage(
+            sprite.index,
+            rock.pos.x + display_size.w,
+            rock.pos.y,
+            sprite.size.x,
+            sprite.size.y,
+            rock.rotation + math.pi / 2.0,
+            scale,
+        );
+        js.drawImage(
+            sprite.index,
+            rock.pos.x,
+            rock.pos.y + display_size.h,
+            sprite.size.x,
+            sprite.size.y,
+            rock.rotation + math.pi / 2.0,
+            scale,
+        );
+        js.drawImage(
+            sprite.index,
+            rock.pos.x,
+            rock.pos.y - display_size.h,
+            sprite.size.x,
+            sprite.size.y,
+            rock.rotation + math.pi / 2.0,
+            scale,
+        );
     }
 
     for (game.bullets.items) |*bullet| {
