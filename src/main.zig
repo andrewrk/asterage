@@ -767,7 +767,11 @@ fn display(dt: f32) void {
         }
     }
 
-    for (game.bullets.items) |bullet| {
+    for (game.bullets.items) |*bullet| {
+        // wrap bullets
+        bullet.pos.x = @mod(bullet.pos.x, display_size.w);
+        bullet.pos.y = @mod(bullet.pos.y, display_size.h);
+
         const sprite = game.assets.sprite(bullet.sprite);
         js.drawImage(
             sprite.index,
