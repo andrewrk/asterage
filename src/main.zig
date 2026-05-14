@@ -126,6 +126,7 @@ const Game = struct {
     rng: std.Random.DefaultPrng = .init(0),
     bullets: std.ArrayList(Bullet) = .empty,
     decorations: std.ArrayList(Decoration) = .empty,
+    over: bool = false,
 
     bullet_small: Sprite.Index = undefined,
     stars: [150]Star = undefined,
@@ -553,7 +554,8 @@ export fn update() void {
             // delete ship and spawn it somewhere else
             switch (player.deaths) {
                 0 => ship.* = game.militia_template,
-                else => ship.* = game.artillery_template,
+                1 => ship.* = game.artillery_template,
+                else => game.over = true,
             }
             player.deaths += 1;
             const new_angle = math.pi * 2 * rng.float(f32);
@@ -679,6 +681,14 @@ export fn update() void {
 fn display(dt: f32) void {
     for (game.stars) |star| {
         js.fillRect(.white, star.rect);
+    }
+
+    if (game.over) {
+        const str = if (game.players[0].deaths >= 2)
+            "Player 2 Wins!"
+        else
+            "Player 1 Wins!";
+        fillText(str, 16, display_center.y, 30);
     }
 
     for (game.ships.items) |*ship| {
