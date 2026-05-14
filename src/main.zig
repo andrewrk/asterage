@@ -477,7 +477,7 @@ fn setupFallible() !void {
     const n_rocks = 1 + rng.uintLessThanBiased(usize, 2);
     for (0..n_rocks) |_| {
         const speed = 5 + rng.float(f32) * 120;
-        const anim_index = rng.uintLessThanBiased(usize, game.rock_animations.len);
+        const anim_index = 0; // rng.uintLessThanBiased(usize, game.rock_animations.len);
         try game.rocks.append(gpa, .{
             .anim_playback = .{ .index = @enumFromInt(anim_index), .time_passed = 0 },
             .pos = display_center.plus(V.unit(rng.float(f32)).scaled(50)).minus(.{ .x = 25, .y = 25 }),
