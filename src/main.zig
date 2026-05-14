@@ -132,6 +132,8 @@ const Game = struct {
     shrapnel_animations: [3]Animation.Index = undefined,
     explosion_animation: Animation.Index = undefined,
     ranger_template: Ship = undefined,
+    militia_template: Ship = undefined,
+    artillery_template: Ship = undefined,
 };
 
 const Bullet = struct {
@@ -164,6 +166,7 @@ const Decoration = struct {
 
 const Player = struct {
     ship: Ship.Index,
+    deaths: u32 = 0,
 };
 
 const ShipSprite = struct {
@@ -362,9 +365,8 @@ fn setupFallible() !void {
     };
 
     const militia_sprite = try ShipSprite.fromPath("img/ship/militia");
-    const militia_radius = ranger_sprite.size / 2.0;
     const militia_turret: Turret = .{
-        .radius = militia_radius,
+        .radius = 16,
         .angle = 0,
         .cooldown = 0,
         .cooldown_amount = 0.1,
@@ -372,7 +374,7 @@ fn setupFallible() !void {
         .bullet_duration = 0.5,
         .bullet_damage = 20,
     };
-    const militia_template: Ship = .{
+    game.militia_template = .{
         .input = .{},
         .prev_input = .{},
         .sprite = militia_sprite,
@@ -384,24 +386,45 @@ fn setupFallible() !void {
         .collision_damping = 0.6,
         .density = 0.04,
         .turret = militia_turret,
-        .radius = militia_radius,
+        .radius = 16,
         .hp = 160,
         .max_hp = 160,
     };
 
+    const artillery_sprite = try ShipSprite.fromPath("img/ship/artillery");
+    const artillery_turret: Turret = .{
+        .radius = 24,
+        .angle = 0,
+        .cooldown = 0,
+        .cooldown_amount = 0.05,
+        .bullet_speed = 1500,
+        .bullet_duration = 0.5,
+        .bullet_damage = 40,
+    };
+    game.artillery_template = .{
+        .input = .{},
+        .prev_input = .{},
+        .sprite = artillery_sprite,
+        .pos = .{ .x = 0, .y = 0 },
+        .vel = .{ .x = 0, .y = 0 },
+        .rotation = -math.pi / 2.0,
+        .rotation_vel = math.pi * 1.3,
+        .thrust = 75,
+        .collision_damping = 0.8,
+        .density = 0.08,
+        .turret = artillery_turret,
+        .radius = 24,
+        .hp = 240,
+        .max_hp = 240,
+    };
+
     const ships = &game.ships;
 
-    //for (&game.players, 0..) |_, i| {
-    //    try ships.append(gpa, game.ranger_template);
-    //    ships.items[ships.items.len - 1].pos = .{
-    //        .x = 20 + 100 * @as(f32, @floatFromInt(i)),
-    //        .y = 20,
-    //    };
-    //}
+    const width: f32 = @floatFromInt(display_size.w);
     try ships.append(gpa, game.ranger_template);
-    ships.items[0].pos = .{ .x = 20, .y = 20 };
-    try ships.append(gpa, militia_template);
-    ships.items[1].pos = .{ .x = 160, .y = 20 };
+    ships.items[0].pos = .{ .x = width * 0.2, .y = display_center.y };
+    try ships.append(gpa, game.ranger_template);
+    ships.items[1].pos = .{ .x = width * 0.8, .y = display_center.y };
 
     generateStars(&game.stars);
 }
@@ -508,7 +531,8 @@ export fn update() void {
         }
     }
 
-    for (game.ships.items) |*ship| {
+    for (&game.players) |*player| {
+        const ship = player.ship.ptr();
         ship.pos.add(ship.vel.scaled(dt));
 
         // wrap positions
@@ -527,7 +551,11 @@ export fn update() void {
                 .duration = 100,
             }) catch {};
             // delete ship and spawn it somewhere else
-            ship.* = game.ranger_template;
+            switch (player.deaths) {
+                0 => ship.* = game.militia_template,
+                else => ship.* = game.artillery_template,
+            }
+            player.deaths += 1;
             const new_angle = math.pi * 2 * rng.float(f32);
             ship.pos = display_center.plus(V.unit(new_angle).scaled(500));
             continue;
