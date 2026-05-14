@@ -456,7 +456,8 @@ fn setupFallible() !void {
     const rng = game.rng.random();
 
     // set up rocks
-    for (0..2) |_| {
+    const n_rocks = 1 + rng.uintLessThanBiased(usize, 2);
+    for (0..n_rocks) |_| {
         const speed = 5 + rng.float(f32) * 120;
         const anim_index = rng.uintLessThanBiased(usize, game.rock_animations.len);
         try game.rocks.append(gpa, .{
