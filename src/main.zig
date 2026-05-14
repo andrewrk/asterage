@@ -890,7 +890,7 @@ fn display(dt: f32) void {
     }
 
     if (game.over) {
-        const str = if (game.players[0].deaths >= 2)
+        const str = if (game.players[0].deaths >= 3)
             "Player 2 Wins!"
         else
             "Player 1 Wins!";
