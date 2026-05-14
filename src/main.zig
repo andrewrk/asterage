@@ -15,7 +15,7 @@ const js = struct {
     extern "js" fn fillText(ptr: [*]const u8, len: usize, size: u16, x: u16, y: u16) void;
     extern "js" fn fillRect(Color, Rect) void;
     extern "js" fn drawImage(img: Sprite.Index, x: f32, y: f32, w: f32, h: f32, radians: f32, scale: f32) void;
-    extern "js" fn loadSound(ptr: [*]const u8, len: usize) void;
+    extern "js" fn loadSound(ptr: [*]const u8, len: usize) u32;
     extern "js" fn playSound(sound: usize) void;
     extern "js" fn loadImage(ptr: [*]const u8, len: usize) void;
     extern "js" fn seed() f64;
@@ -66,6 +66,17 @@ fn Slice(T: type) type {
         }
     };
 }
+
+const SoundPool = struct {
+    idx: usize,
+    sounds: [16]u32,
+
+    fn next(sp: *SoundPool) u32 {
+        if (sp.idx > 15) sp.idx = 0;
+        defer sp.idx += 1;
+        return sp.sounds[sp.idx];
+    }
+};
 
 const Rect = packed struct(u64) {
     x: i16,
@@ -322,10 +333,17 @@ export fn setup() void {
     setupFallible() catch @panic("setup failed");
 }
 
+var shot_sound: SoundPool = .{
+    .idx = 0,
+    .sounds = @splat(0),
+};
+
 fn setupFallible() !void {
     game.rng = .init(@bitCast(js.seed()));
 
-    loadSound("sfx/weak_shot1.ogg");
+    for (0..16) |i| {
+        shot_sound.sounds[i] = loadSound("sfx/weak_shot1.ogg");
+    }
     const assets = &game.assets;
 
     const rock_sprites = [_]Sprite.Index{
@@ -473,8 +491,8 @@ fn setupFallible() !void {
     }
 }
 
-fn loadSound(sound: []const u8) void {
-    js.loadSound(sound.ptr, sound.len);
+fn loadSound(sound: []const u8) u32 {
+    return js.loadSound(sound.ptr, sound.len);
 }
 
 const Star = struct {
@@ -754,7 +772,9 @@ export fn update() void {
         const turret = &ship.turret;
         {
             turret.cooldown -= dt;
+
             if (ship.input.fire and turret.cooldown <= 0) {
+                js.playSound(shot_sound.next());
                 turret.cooldown = turret.cooldown_amount;
                 game.bullets.append(gpa, .{
                     .sprite = game.bullet_small,

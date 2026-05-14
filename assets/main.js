@@ -66,6 +66,7 @@ WebAssembly.instantiateStreaming(fetch("main.wasm"), {
       const path = decodeString(ptr, len);
       const sound = new Audio(path);
       sounds.push(sound);
+      return sounds.length - 1;
     },
     playSound: function(sound) {
       sounds[sound].play();
